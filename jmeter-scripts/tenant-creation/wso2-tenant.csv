@@ -1,0 +1,2 @@
+domain,admin_username,admin_password,email,first_name,last_name,run,cross_tenant_domain,suffix
+wso2.com,admin,admin,john.doe@adp-example.com,John,Doe,true,carbon.super,EC
