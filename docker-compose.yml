@@ -23,7 +23,7 @@ services:
       MYSQL_ROOT_PASSWORD: root
     volumes:
       - ./conf/mysql/scripts:/docker-entrypoint-initdb.d
-      - ./conf/mysql/conf/my.cnf:/etc/mysql/conf.d/my.cnf
+      # - ./conf/mysql/conf/my.cnf:/etc/mysql/conf.d/my.cnf
     ulimits:
       nofile:
         soft: 20000

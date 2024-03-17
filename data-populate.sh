@@ -21,7 +21,7 @@ MIGRATED_APIM_VERSION=4.3.0
 SERVER_HOST=localhost
 SERVER_PORT=9444
 WSO2_SERVER_HOME=wso2am-4.2.0
-WSO2_SERVER_HOME_NEW=wso2am-4.3.0-m2
+WSO2_SERVER_HOME_NEW=wso2am-4.3.0-alpha
 MYSQL_CONNECTOR_VERSION=8.0.17
 MIGRATION_RES_HOME=apim-migration-resources-1
 DB_TYPE=mysql
@@ -40,7 +40,7 @@ function log_error(){
 wait_for_APIM_server() {
     while ! nc -z $SERVER_HOST $SERVER_PORT; do
         log_info "Waiting for the server to be up..."
-        sleep 10
+        sleep 20
     done
 
     log_info "Server is up. Proceeding with the script."
@@ -49,6 +49,7 @@ wait_for_APIM_server() {
 
 log_info "Starting docker-compose..."
 docker-compose up -d || log_error "Failed to start docker-compose."
+sleep 20
 
 # Download WSO2 API Manager 4.2.0
 log_info "Downloading WSO2 API Manager 4.2.0..."
@@ -56,11 +57,11 @@ log_info "Downloading WSO2 API Manager 4.2.0..."
 
 # Extract the downloaded zip file
 log_info "Extracting WSO2 API Manager 4.2.0..."
-unzip wso2am-${PREVIOUS_APIM_VERSION}.zip || log_error "Failed to extract WSO2 API Manager."
+#unzip wso2am-${PREVIOUS_APIM_VERSION}.zip || log_error "Failed to extract WSO2 API Manager."
 
 
 log_info "Downloading MySQL JDBC connector..."
-wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar || log_error "Failed to download MySQL JDBC connector."
+# wget https://repo1.maven.org/maven2/mysql/mysql-connector-java/${MYSQL_CONNECTOR_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar || log_error "Failed to download MySQL JDBC connector."
 
 # add MySQL JDBC connector to server home as a third party library
 cp mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar ${WSO2_SERVER_HOME}/repository/components/dropins/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar
@@ -82,15 +83,31 @@ cp jmeter-scripts/tenant-creation/apim-4.2.0-data-populating-tenant-creation-pla
 cp jmeter-scripts/data/apim-4.2.0-data-populating-migration-plan.jmx ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-migration-plan.jmx
 
 # Download Apache JMeter
-# log_info "Downloading Apache JMeter..."
+log_info "Downloading Apache JMeter..."
 # wget "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.5.tgz" || log_error "Failed to download Apache JMeter."
 
 # Extract Apache JMeter
-tar -xf apache-jmeter-5.5.tgz || log_error "Failed to extract Apache JMeter."
+# tar -xf apache-jmeter-5.5.tgz || log_error "Failed to extract Apache JMeter."
 
 wait_for_APIM_server
 
-./apache-jmeter-5.5/bin/jmeter -n -t ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-tenant-creation-plan.jmx -l ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-tenant-creation-plan.jtl
+log_info "Populating the data to super tenant..."
+cp jmeter-scripts/tenant-creation/super-tenant.csv ${MIGRATION_RES_HOME}/apim-data-populator/resources/tenants.csv
+
+./apache-jmeter-5.5/bin/jmeter -n -t ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-tenant-creation-plan.jmx -l ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-super-tenant-creation-plan.jtl
+
+log_info "Restarting the API Manager 4.2.0..."
+sh wso2am-4.2.0/bin/api-manager.sh restart
+sleep 20
+
+wait_for_APIM_server
+
+./apache-jmeter-5.5/bin/jmeter -n -t ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-migration-plan.jmx -l ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-migration-plan.jtl
+
+log_info "Populating the data to wso2 tenant..."
+cp jmeter-scripts/tenant-creation/wso2-tenant.csv ${MIGRATION_RES_HOME}/apim-data-populator/resources/tenants.csv
+
+./apache-jmeter-5.5/bin/jmeter -n -t ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-tenant-creation-plan.jmx -l ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating--wso2-tenant-creation-plan.jtl
 
 log_info "Restarting the API Manager 4.2.0..."
 sh wso2am-4.2.0/bin/api-manager.sh restart
@@ -99,5 +116,6 @@ wait_for_APIM_server
 
 ./apache-jmeter-5.5/bin/jmeter -n -t ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-migration-plan.jmx -l ${MIGRATION_RES_HOME}/apim-data-populator/apim-4.2.0-data-populating-migration-plan.jtl
 
+
 log_info "Stopping the API Manager 4.2.0..."
-sh wso2am-4.2.0/bin/api-manager.sh stop
+sh ${WSO2_SERVER_HOME}/bin/api-manager.sh stop

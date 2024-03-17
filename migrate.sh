@@ -20,7 +20,7 @@ MIGRATED_APIM_VERSION=4.3.0
 SERVER_HOST=localhost
 SERVER_PORT=9444
 WSO2_SERVER_HOME=wso2am-4.2.0
-WSO2_SERVER_HOME_NEW=wso2am-4.3.0-m2
+WSO2_SERVER_HOME_NEW=wso2am-4.3.0-alpha
 MYSQL_CONNECTOR_VERSION=8.0.17
 MIGRATION_RES_HOME=apim-migration-resources-1
 DB_TYPE=mysql
@@ -34,6 +34,16 @@ function log_error(){
     exit 1
 }
 
+# Function to wait for the server to be up
+wait_for_APIM_server() {
+    while ! nc -z $SERVER_HOST $SERVER_PORT; do
+        log_info "Waiting for the server to be up..."
+        sleep 20
+    done
+
+    log_info "Server is up. Proceeding with the script."
+}
+
 # Migration process
 log_info "Starting the migration process..."
 docker exec -i mysql-db2 mysql -u root -proot WSO2AM_DB < migration-db-scripts/mysql_script.sql || log_error "Failed to migrate the database." 
@@ -44,7 +54,7 @@ log_info "Downloading WSO2 API Manager 4.3.0..."
 
 # Extract the downloaded zip file
 log_info "Extracting WSO2 API Manager 4.3.0..."
-unzip wso2am-${MIGRATED_APIM_VERSION}-m2.zip || log_error "Failed to extract WSO2 API Manager."
+unzip wso2am-${MIGRATED_APIM_VERSION}-alpha.zip || log_error "Failed to extract WSO2 API Manager."
 
 # Replace deployment.toml file
 cp conf/apim/430/repository/conf/deployment.toml ${WSO2_SERVER_HOME_NEW}/repository/conf/deployment.toml
@@ -52,9 +62,21 @@ cp conf/apim/430/repository/conf/deployment.toml ${WSO2_SERVER_HOME_NEW}/reposit
 # add MySQL JDBC connector to server home as a third party library
 cp mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar ${WSO2_SERVER_HOME_NEW}/repository/components/dropins/mysql-connector-java-${MYSQL_CONNECTOR_VERSION}.jar
 
+mv wso2am-4.3.0-alpha wso2am-4.3.0-SNAPSHOT
+
+zip -r wso2am-4.3.0-SNAPSHOT.zip wso2am-4.3.0-SNAPSHOT
+
 # Start the API Manager 4.3.0
 log_info "Starting API-Manager 4.3.0..."
 # nohup sh wso2am-4.3.0-m2/bin/api-manager.sh &
-sh wso2am-4.3.0-m2/bin/api-manager.sh
+# sh ${WSO2_SERVER_HOME_NEW}/bin/api-manager.sh
 
-wait_for_APIM_server
+# wait_for_APIM_server
+
+
+cp wso2am-4.3.0-SNAPSHOT.zip /Users/chashika/Documents/WSO2/repositories/Public/product-apim/modules/distribution/product/target/wso2am-4.3.0-SNAPSHOT.zip
+
+cd /Users/chashika/Documents/WSO2/repositories/Public/product-apim/modules/integration/tests-integration/tests-migration
+mvn clean install
+
+docker-compose down
